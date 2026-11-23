@@ -1,82 +1,179 @@
-# GA4 landing reports to Slack
+# Landing-page reports for GA4
 
-A self-hosted tool for reporting GA4 landing-page sessions and a selected event count to a Slack conversation, with threshold and failure alerts. Choose the pages, the event, the GA4 property, the reporting window, and the destination. The report compares the latest complete calendar days with the immediately preceding non-overlapping window of the same length.
+**Understand what happens after people arrive on your landing pages — and share a concise report with your team in Slack.**
 
-The project queries the **Google Analytics Data API** directly. It can be used alongside an MCP server, but does not itself expose an MCP interface. It runs on infrastructure you control; no hosted service is included.
+![An analytics chart flows through a scheduled server to a report and alert.](docs/images/reporting-illustration.png)
 
-## What the numbers mean
+This free, self-hosted tool reads your Google Analytics 4 (GA4) data, compares two equal periods, and posts a report to Slack. You choose the pages, the event to count, and the thresholds for alerts. It runs on a computer or server you control.
 
-For each configured landing path, **sessions** are GA4 sessions whose initial landing page matches that path. **Events** are GA4 `eventCount` for the configured event, grouped by the GA4 `landingPage` dimension. GA4 attribution and dimension compatibility depend on the property and should be validated; this does not establish that the event happened on the landing page. A session can contain multiple occurrences; event counts therefore are not counts of unique visitors, unique sessions with an event, conversions, revenue, or confirmed purchases. The report does not calculate a conversion rate from `eventCount`.
+> **What you need:** access to a GA4 property, permission to create a Google Cloud service account and a Slack app, and a computer or Linux server with Docker. If someone else manages your accounts, ask them to help with access. You do not need to write code.
 
-GA4 reporting can change after a day ends because of processing delays. A completed calendar day is not a promise of finalized data. Check the actual event implementation and GA4 definitions before drawing business conclusions. The query covers the whole GA4 property, including all streams: identical landing paths on different sites are combined. Use a property whose scope matches the report; stream or hostname filtering is not implemented. Only configured paths are reported; this tool does not automatically discover or map new pages. A valid report is not a claim that all relevant landing pages have been configured.
+**Scope:** This project reads the Google Analytics Data API. It does **not** connect to Google Ads, change campaigns, or provide an MCP server. Google's separate [Analytics MCP server](https://github.com/googleanalytics/google-analytics-mcp) and [Google Ads MCP server](https://github.com/googleads/google-ads-mcp) are available if you need those integrations. This project is independent and is not an official Google product.
 
-The application uses the configured IANA timezone and checks it against the GA4 property timezone. It rejects unexpected timezone, sampled, truncated or incomplete responses rather than silently delivering them. GA4 quotas and property permissions apply; reporting availability and aggregation depend on the underlying GA4 property.
+## What your team receives
 
-## Requirements
+For each page you list, the report shows:
 
-- Docker with the Compose plugin, and an administrator who can configure a scheduler. Python installation instructions are below for local development.
-- A Google Cloud project with the Analytics Data API enabled and a service account. Grant that service account read access to the intended GA4 property. Download a service-account JSON to a secure location outside the checkout; protect it as a password.
-- A Slack app installed in the intended workspace and a bot token with `chat:write`. Add the bot to the intended channel and use its channel ID. Private channels require membership. Slack permissions for group direct messages are different; a bot is not automatically able to post to an existing group DM. Verify the actual token identity and destination before use.
+- **Sessions:** how many GA4 sessions started on that landing page.
+- **Events:** how many times your selected event was counted by GA4, grouped by `landingPage`.
+- **Comparison:** the latest complete period against the immediately preceding period of the same length.
+- **Alerts:** a separate Slack message when a configured percentage-change threshold is crossed. The tool also attempts a failure notification if a scheduled run fails.
 
-Use a dedicated least-privilege identity. Never commit credentials, tokens, customer reports, actual IDs, or the local `.env` and `config.json`. The default `.gitignore` is a convenience, not a substitute for a review of files and Git history before sharing.
+**Example — made-up numbers:** if the window is 7 days and the run occurs on 15 January, the report compares 8–14 January with 1–7 January. It might show:
 
-## First setup
+```text
+GA4 landing report: 2027-01-08–2027-01-14 (America/New_York)
+Previous: 2027-01-01–2027-01-07
+Event: Contact button clicks (contact_click)
 
-Clone the repository on the host where the scheduler will run:
+Spring offer (/spring-offer): sessions 80 vs 120; events 25 vs 40
+```
+
+If you set a 30% decrease alert with a minimum previous value of 100 sessions, this example produces an alert: sessions fell from 120 to 80, a decrease of 33.3%. If the previous value is zero, no percentage alert is sent because there is no comparison base.
+
+**Important:** `eventCount` counts event occurrences, not unique people or unique converting sessions. The event could occur on a later page; its appearance under a `landingPage` does not prove it occurred on the landing page. A click is not a confirmed sale. The tool deliberately does not calculate conversion rate from `eventCount`.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Your GA4 property] -->|Read sessions and events| B[This tool on your server]
+    C[Your settings] --> B
+    D[Your scheduler] -->|Starts the tool| B
+    B -->|Report| E[Slack report channel]
+    B -->|Threshold or failure notice| F[Slack alert channel]
+    B -->|Delivery records| G[Persistent state volume]
+```
+
+The schedule is configured **on your machine**, not inside the tool. The tool stores delivery records so it can avoid posting the same report again. If a send has an uncertain outcome, it stops for a person to check rather than automatically posting a duplicate.
+
+---
+
+## Before you start
+
+You will need:
+
+1. **GA4:** a property that already receives data, its numeric property ID, and permission to grant a service account access. Your event must already be configured in GA4. To find the ID, open **Admin → Property settings → Property details** in Google Analytics. Note the property's reporting time zone, too. The numeric property ID is different from a `G-...` measurement ID. Google may change menu labels; see its [property details guide](https://support.google.com/analytics/answer/9304776).
+2. **Google Cloud:** a project in which the **Google Analytics Data API** is enabled, plus a service account with read access to the GA4 property. You will create a JSON key for the service account.
+3. **Slack:** permission to create or install an app and add it to the report and alert channels.
+4. **A host:** Docker with the Compose plugin, Git, an internet connection, and a place to keep the host running on schedule. Linux is recommended for the scheduling example below. Ask your administrator for help if needed.
+
+Your Google and Slack accounts may require administrator approval. The host needs access to Google and Slack; a laptop that is off or asleep cannot run scheduled jobs.
+
+## Step 1 — Give the tool read access to GA4
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), select an existing project or create one.
+2. Open **APIs & Services → Library**, find **Google Analytics Data API**, and enable it for that project.
+3. Open **IAM & Admin → Service Accounts** and create a dedicated service account. Copy its email address; it looks like `name@project.iam.gserviceaccount.com`.
+4. In Google Analytics, open **Admin → Property access management** for your intended property. Add that service-account email with the **Viewer** role. Google Cloud project access alone does not grant access to your GA4 property.
+5. In Google Cloud, open the service account's **Keys** section and create a **JSON** key. Store the file securely on the host, **outside this repository**. Treat it like a password: anyone who obtains it may be able to read the data available to that service account. Some organizations disable service-account keys; if so, ask your administrator for an approved credential method.
+
+Google's [official Data API quickstart](https://developers.google.com/analytics/devguides/reporting/data/v1/quickstart) covers enabling the API and service-account access.
+
+## Step 2 — Create a Slack app
+
+1. Open [Your Slack Apps](https://api.slack.com/apps) and create an app in your team's workspace. An administrator may need to approve it.
+2. In **OAuth & Permissions → Bot Token Scopes**, add **`chat:write`**. Install the app to the workspace and approve the requested access.
+3. Copy the **Bot User OAuth Token** into a secure place for the next step. Do not paste it into a public issue, a commit, or a chat message.
+4. In Slack, invite the app to the channel where reports should appear. If alerts go to a different channel, invite it there too. In each channel, open its details and copy its **channel ID**.
+
+Use a dedicated app with access only where needed. An app is not automatically able to post to an existing group direct message; start with a regular test channel and verify the destination. Slack's [app setup guide](https://docs.slack.dev/app-management/quickstart-app-settings/) explains scopes and installation.
+
+## Step 3 — Install the project
+
+Open a terminal on the machine that will run the reports:
 
 ```sh
 git clone https://github.com/FlaiData/ga4-landing-reports.git
 cd ga4-landing-reports
-```
-
-```sh
 cp config.example.json config.json
 cp .env.example .env
 chmod 600 config.json .env
 ```
 
-Edit `config.json`:
+These commands create two **private local files** from examples. The examples contain placeholder data only. Do not upload your completed `config.json`, `.env`, service-account key, generated reports, or delivery state to GitHub.
 
-- `report_id`: stable identifier for this report. Keep it unchanged across ordinary label, path, event, rule and formatting edits; changing it creates a separate delivery identity.
-- `property_id`: your numeric GA4 property ID as a string.
-- `timezone`: the GA4 property's IANA timezone, e.g. `America/New_York`.
-- `days`: number of full days in each comparison window, from 1 to 365.
-- `paths`: list of unique, absolute landing paths without query strings, each with a human-readable `label`. These are examples only; enter your own verified paths.
-- `event_name`: the exact GA4 event name to count.
-- `event_label`: an unambiguous display label for that event.
-- `slack_channel_id`: ID of the intended Slack conversation.
-- `state_dir`: writable storage for delivery records. Use `/data` with the included Compose setup.
-- `alert_channel_id`: the Slack conversation for threshold and failure alerts. It may be the same as the report destination; the token identity needs access to both.
-- `alert_rules`: a list of rules with `metric` (`sessions` or `events`), `direction` (`increase` or `decrease`), `percent`, and `min_previous`. Each rule is evaluated per configured landing path against the preceding window; e.g. a 30% decrease with `min_previous` 100 triggers only when the preceding value is at least 100. A zero previous value never triggers a percentage-based alert. An empty list disables threshold alerts.
+Check that Docker is running:
 
-Edit `.env` locally: set `GA4_CREDENTIALS_FILE` to the absolute path of the credential JSON and `SLACK_BOT_TOKEN` to the bot token. Restrict `.env`, the credential file and the checkout to trusted administrators. The container runs as UID 10001; ensure that identity can read the mounted credential file using appropriate file ownership or ACLs, while denying access to unrelated users. Do not make credentials world-readable. The config and credentials mounts are read-only; the named volume holds delivery state.
+```sh
+docker --version
+docker compose version
+docker info
+```
 
-Build and test with fresh GA4 data without sending anything to Slack:
+If `docker info` cannot connect, start Docker Desktop or the Docker service on your host, then try again. If your user cannot access Docker, ask your administrator for access rather than running the project with broad file permissions.
+
+## Step 4 — Enter your settings
+
+Open `config.json` in a text editor. Keep JSON syntax: strings need double quotes, entries need commas, and the final entry in a list must not have a trailing comma. The supplied `config.example.json` shows a complete example.
+
+| Setting | What to enter |
+| --- | --- |
+| `report_id` | A short stable name such as `landing-pages`. Keep it unchanged when editing labels, pages, event names or rules. Changing it creates a new delivery identity. |
+| `property_id` | Your **numeric GA4 property ID as a string**, for example `"123456789"`. Replace the example. |
+| `timezone` | The IANA time zone of your GA4 property, for example `America/New_York`. It must match the property's time zone. |
+| `days` | Number of complete days in **each** period, from 1 to 365. `7` compares the latest 7 complete days with the preceding 7. |
+| `paths` | Pages to include. A URL such as `https://example.com/spring-offer?utm_source=...` becomes `"/spring-offer"`. Give each path a label. Paths must be unique and have no query string or fragment. |
+| `event_name` | The exact existing GA4 event name, such as `contact_click`. Use only letters, digits and underscores. |
+| `event_label` | A readable label, such as `Contact button clicks`. |
+| `slack_channel_id` | ID of the report channel, as a string. |
+| `alert_channel_id` | ID of the alert channel; it may be the same as the report channel. This field is required even if you turn off threshold alerts. |
+| `alert_rules` | Rules for `sessions` or `events`: direction `increase` or `decrease`, percentage and `min_previous`. Use `[]` for no threshold alerts. Failure-notification attempts remain enabled. |
+| `state_dir` | Use `/data` with the supplied Docker Compose setup. This is where delivery records are kept. |
+
+**Scope of data:** the tool queries the entire GA4 property. If several sites or data streams have the same landing path, their data can be combined. Stream/hostname filtering and automatic page discovery are not implemented. Include all relevant paths yourself and use a property whose scope matches the report. The tool does not verify that a configured path or event name exists: a typo, wrong case or unmatched path can look like a zero. Check names and dates in GA4 before enabling alerts.
+
+Next, open `.env` and replace the placeholders:
+
+```dotenv
+GA4_CREDENTIALS_FILE=/absolute/path/to/your-service-account.json
+SLACK_BOT_TOKEN=your-slack-bot-token
+```
+
+The second line is a placeholder: replace it with your real token in the local file only. The credential file and `.env` must be readable only by trusted administrators. The container runs as **UID 10001** and must be able to read **both** `config.json` and the mounted credential file. On a standard Linux host with filesystem ACL support and without user-namespace remapping, an administrator can grant that one UID read access while retaining the files' restrictive permissions:
+
+```sh
+sudo setfacl -m u:10001:r config.json
+sudo setfacl -m u:10001:r /absolute/path/to/your-service-account.json
+```
+
+Replace the example path with the real key path. `setfacl` may need to be installed, and rootless Docker or user-namespace remapping can map container IDs differently; ask your administrator to adapt the ACL or ownership for your host. Do not make either file world-readable. The `.env` file is read by Compose on the host and does not need to be mounted into the container.
+
+## Step 5 — Preview and verify
+
+Build the image, then prepare a report **without sending a Slack message**:
 
 ```sh
 docker compose build
+docker compose run --rm --entrypoint sh report -c 'test -r /app/config.json && test -r /run/secrets/ga4-credentials.json && echo "Both files are readable"'
 docker compose run --rm report --preview
 ```
 
-Review the reported date ranges, timezone, landing paths and event labels, and verify that GA4 values match a known comparison in the GA4 interface. The preview makes live read requests to Google; it does not send a Slack message.
+The preview makes live, read-only GA4 requests. It prints the report and any threshold alerts in the terminal. Compare the period, page paths, sessions and event counts with GA4 for the same dates and property time zone. Verify what your event actually measures.
 
-When the preview is correct and the Slack app has access to the intended destination:
+The tool refuses sampled, thresholded, truncated, restricted or otherwise incomplete responses it detects, and refuses a mismatch between the configured and GA4 property time zones. These checks do not prove that all tracking is correct or that all data has arrived; GA4 can revise recent data after a day ends.
+
+## Step 6 — Send a first report
+
+When the preview is correct and the app has access to the destination, send **one real report**:
 
 ```sh
 docker compose run --rm report
 ```
 
-Delivery uses a persistent state volume. Keep it across deployments and container recreations. The application reserves a reporting period before sending, records confirmed Slack timestamps, and refuses automatic resend when the delivery outcome is uncertain. Reports, threshold alerts and failure notifications have separate delivery keys. For the same report ID, property, window and channel, changing paths or labels does not cause a resend; changing report ID, property, window length, timezone or destination creates a new identity and can send again. A previously sent report is not resent after data or text changes. An incomplete or uncertain send requires checking the actual Slack conversation and the state before manually resolving it. Do not delete or reset the state merely to force a retry: a message might already have been posted.
+Open the intended Slack channel and confirm the complete message arrived. A successful preview alone does not verify Slack delivery. If the report is split into parts, later parts are replies in the same thread. The tool sends a separate message to the alert channel only when a configured threshold is crossed.
 
-## Schedule on a Linux host
+The named Docker volume `report-state` stores delivery records. Keep it when rebuilding or updating. For the same report ID, property, window and channel, a successfully sent report is not sent again merely because its text or page labels changed. Changing the report ID, property, time zone, window length, or destination creates a different identity and may result in another message. Separate installations with separate state can also send duplicates.
 
-This example runs twice weekly at 09:00 **in the explicitly specified timezone**. Replace `/srv/ga4-landings` with the actual absolute checkout path and choose the schedule and timezone suitable for the team. A systemd calendar timezone is independent of the GA4 reporting timezone.
+## Step 7 — Schedule the reports on Linux
 
-`/etc/systemd/system/ga4-landings.service`:
+The tool does not create its own schedule. The example below uses **systemd**, common on Linux servers, to run on Mondays and Thursdays at 09:00 in `America/New_York`. The schedule's time zone is separate from the GA4 property's time zone. Replace `/srv/ga4-landings` with the **absolute path to your actual checkout** in both files. Ask a server administrator if you do not have `sudo` access.
+
+Create `/etc/systemd/system/ga4-landings.service`:
 
 ```ini
 [Unit]
-Description=GA4 landing reports to Slack
+Description=Landing-page report to Slack
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service
@@ -88,11 +185,11 @@ ExecStart=/usr/bin/docker compose --project-directory /srv/ga4-landings run --rm
 TimeoutStartSec=45min
 ```
 
-`/etc/systemd/system/ga4-landings.timer`:
+Create `/etc/systemd/system/ga4-landings.timer`:
 
 ```ini
 [Unit]
-Description=Scheduled GA4 landing report
+Description=Scheduled landing-page report
 
 [Timer]
 OnCalendar=Mon,Thu *-*-* 09:00:00 America/New_York
@@ -104,7 +201,7 @@ Unit=ga4-landings.service
 WantedBy=timers.target
 ```
 
-Validate the calendar and service before enabling them:
+Check the schedule and enable it:
 
 ```sh
 systemd-analyze calendar 'Mon,Thu *-*-* 09:00:00 America/New_York'
@@ -114,9 +211,13 @@ sudo systemctl enable --now ga4-landings.timer
 systemctl list-timers --all ga4-landings.timer
 ```
 
-`Persistent=true` can run a missed job when the host returns. The chosen timezone automatically follows that region's daylight-saving rules. Run only one scheduler for the same destination and state directory; independent installations with separate state can still duplicate a report.
+`Persistent=true` permits a missed run when the host comes back online. The named time zone follows its daylight-saving rules. Configure **only one scheduler** for the same report, destination and state. macOS and Windows need a separate scheduler; the systemd example does not apply to them.
 
-## Monitoring and recovery
+## Monitoring, alerts and recovery
+
+![A calendar, a checked report and a notification inbox represent a scheduled reporting workflow.](docs/images/monitoring-illustration.png)
+
+Check a Linux-hosted run with:
 
 ```sh
 systemctl status ga4-landings.service --no-pager
@@ -124,27 +225,49 @@ journalctl -u ga4-landings.service -n 100 --no-pager
 systemctl list-timers --all ga4-landings.timer
 ```
 
-A failed run is visible in systemd and the journal. After loading a valid configuration, the application attempts a fixed-category failure notification to `alert_channel_id` once per period and error type, provided it has a token and functioning state storage. Threshold notifications use separate delivery state. The application does not send a recovery or all-clear notification; separate uptime monitoring is needed to detect missed runs. Alerts are **not guaranteed**: missing or invalid configuration, an unavailable token or state store, and a Slack outage can prevent them. The notification deliberately omits exception contents; consult the journal for diagnosis. For independent coverage, configure a separate monitoring system or a systemd `OnFailure=` service and verify that alerting path separately. Do not put tokens, private report contents or credentials into logs and alerts.
+- **Metric alert:** sent to `alert_channel_id` when a rule crosses its threshold for a configured path. Each rule compares the current period with the immediately preceding period and requires its `min_previous` value. A zero baseline cannot produce a percentage alert.
+- **Failure notice:** after a valid configuration is loaded, the tool attempts a short, fixed-category message once per period and error type. It does not include exception details. Check the server journal for the failure stage and error type.
+- **Alert limits:** a missing/invalid configuration, unavailable token or state storage, or Slack outage can prevent a failure notice. There is no automatic all-clear or missed-run alert. Use an independent monitor if your team needs reliable notification that the scheduler itself is down.
+- **Uncertain Slack send:** first check the destination and the persistent delivery state. A timeout can mean the message arrived even if no confirmation returned. Do not delete state or force a retry until a responsible person has checked which parts arrived and reconciled the record.
+- **Permission or time-zone error:** verify the service account has access to the correct property, the Data API is enabled, the credential file is readable by UID 10001, and the configured time zone matches GA4. The journal deliberately does not print sensitive API responses.
 
-If Slack delivery times out or returns an ambiguous response, inspect the destination, delivery state and journal first. Confirm exactly which parts arrived before changing state or rerunning. A preview is useful for checking configuration but is not evidence of successful Slack delivery. If GA4 access, Slack access, timezone validation, data quality or the configured page roster needs attention, resolve the cause before a new production run.
+For a production setup, have an administrator establish an independent monitoring route, document who checks failed jobs, and test alert delivery in an authorized test channel. To **inspect** delivery records locally without modifying them:
 
-## Updating safely
+```sh
+docker compose run --rm --entrypoint sh report -c 'ls -l /data; for f in /data/*.json; do [ -f "$f" ] && cat "$f"; done'
+```
 
-To learn about new versions, use GitHub's **Watch → Custom → Releases** on this repository. Runtime threshold and failure messages are delivered to the configured Slack alert channel; release notifications are separate. Review releases before updating: updates are not installed automatically.
+The records contain channel identifiers and delivery timestamps; keep the output private. There is currently no automatic reconciliation command. Ask an administrator to compare the state with Slack and determine a safe recovery; do not edit or delete the records blindly.
 
-1. Check the release notes and review changes. Back up your `config.json` and the Docker volume holding delivery state; preserve the credential and `.env` securely outside source control.
-2. Test the new version in a separate checkout and state volume, with `--preview`; do not send test reports into the production destination. Reusing the production state volume from two simultaneous jobs can interfere with delivery.
-3. Update the production checkout to the reviewed version, rebuild with `docker compose build`, and run a preview. Preserve the original named state volume and verify the actual Compose project name before replacing containers.
-4. Check the timer, the next scheduled run and the journal. Never remove volumes as part of a routine update. If rolling back, preserve and reconcile the current state so a previously posted report is not repeated.
+## Safe updates for your team
 
-## Local development
+Updates are **not automatic**. On GitHub, choose **Watch → Custom → Releases** if you want GitHub release notifications; maintainers must publish releases for this to notify you. These are different from runtime Slack alerts.
 
-Create a virtual environment, install the package with `pip install -e .`, and run the tests with `python -m unittest discover -s tests`. For local execution set `GOOGLE_APPLICATION_CREDENTIALS` to the secure credential path, set a writable local `state_dir` in a private config, and invoke `python -m landing_reports --config /path/to/config.json --preview`.
+1. Read the release notes and review the changes. Back up your private configuration and the persistent state volume securely. Keep credentials outside source control.
+2. Test the reviewed version in a **separate checkout and separate state volume** with `--preview`. Do not post test data to the production channel.
+3. Update the production checkout to the reviewed version, rebuild with `docker compose build`, and run another preview. Preserve the original named `report-state` volume and check the Compose project name before changing containers.
+4. Verify the timer and next run. Do not remove volumes during routine updates. For a rollback, preserve and reconcile current delivery state so already-posted reports are not repeated.
 
-## Security and limitations
+## Troubleshooting
 
-The GA4 credential can read whatever its account is granted; the Slack token can post wherever its app identity is allowed. Restrict both at the source and at rest, rotate them on suspected exposure, and do not paste them into issues or chat. Report content is business data: choose the Slack destination and host permissions accordingly. This project does not manage Google or Slack access, guarantee data freshness, attribute purchases, or automatically resolve uncertain delivery outcomes.
+| What you see | What to check |
+| --- | --- |
+| Docker cannot connect | Start Docker Desktop or the Docker service and retry `docker info`. |
+| GA4 access or authentication error | Enable the Data API; verify the service account's Viewer access to the property, the JSON key path, and permissions on both `config.json` and the key for the mapped container UID. |
+| Time-zone or incomplete-data failure | Match `timezone` to the GA4 property; investigate sampling, thresholds or data restrictions before retrying. |
+| Slack cannot send | Verify the token, channel ID, workspace, `chat:write` scope and app membership in **both** destination channels. Group DMs have different restrictions. |
+| Nothing arrives after a timeout | Check Slack and delivery state before retrying. The tool may be waiting for manual reconciliation. |
+| No threshold alert | Confirm the rule's metric, direction, percentage and `min_previous`; a zero previous value has no percentage comparison. |
+| A page or event shows zero unexpectedly | Check its spelling, case and path against GA4 for the same period; the tool does not validate that the path or event exists. |
 
-## Verification status
+## Data source and trademarks
 
-Automated tests exercise core behaviour without live Google or Slack calls. A real installation still needs its own preview, permission check and end-to-end verification in an authorized test destination before production scheduling.
+[<img src="docs/images/google-analytics-wordmark.png" alt="Google Analytics" width="272">](https://www.google.com/analytics/)
+
+The reports in this project use the Google Analytics Data API. The wordmark above is provided by Google and used subject to the [Google Analytics developer branding guidelines](https://developers.google.com/analytics/terms/branding-policy). Google Analytics and Google Ads are Google trademarks. This independent project is not affiliated with or endorsed by Google. **Google Ads is not supported by this project**; it is mentioned only to help distinguish the separate integration.
+
+## Development and verification
+
+For local development, create a Python virtual environment and run `pip install -e .`, then `python -m unittest discover -s tests`. Set `GOOGLE_APPLICATION_CREDENTIALS` to a protected credential file and use a private config with a writable `state_dir`; `python -m landing_reports --config /path/to/config.json --preview` performs a live GA4 read without Slack delivery.
+
+The automated tests use synthetic data and mock network calls. Every new installation needs its own authorized preview, GA4 data check and end-to-end Slack test. See [LICENSE](LICENSE) for this repository's code license; Google's wordmark remains subject to Google's branding terms.
