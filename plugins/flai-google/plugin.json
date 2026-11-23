@@ -1,0 +1,25 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "flai-google",
+  "version": "0.1.0",
+  "description": "Free, open-source Google Analytics and Google Ads analysis for your AI assistant.",
+  "author": {
+    "name": "FlaiData"
+  },
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true,
+      "interface": {
+        "displayName": "FlaiData Google Analytics & Ads",
+        "shortDescription": "Free Google data insights",
+        "longDescription": "Connect your own Google Analytics 4 and Google Ads accounts for read-only analysis. Free and open source; third-party services and API access requirements may apply.",
+        "developerName": "FlaiData",
+        "category": "Productivity",
+        "capabilities": [
+          "Read"
+        ],
+        "defaultPrompt": "Help me analyze Google Analytics and Google Ads."
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "analytics": {
+      "type": "stdio",
+      "command": "python3",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/start.py",
+        "analytics"
+      ]
+    },
+    "ads": {
+      "type": "stdio",
+      "command": "python3",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/start.py",
+        "ads"
+      ]
+    }
+  }
+}

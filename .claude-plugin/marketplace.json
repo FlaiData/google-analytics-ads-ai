@@ -1,0 +1,14 @@
+{
+  "name": "flaidata-google-tools",
+  "owner": {
+    "name": "FlaiData"
+  },
+  "plugins": [
+    {
+      "name": "flai-google",
+      "source": "./plugins/flai-google",
+      "description": "Free Google Analytics and Google Ads analysis"
+    }
+  ],
+  "description": "Free, open-source Google Analytics and Google Ads tools by FlaiData"
+}

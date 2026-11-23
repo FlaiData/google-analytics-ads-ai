@@ -1,0 +1,10 @@
+{
+  "analytics": {
+    "credentials_file": "/absolute/path/to/analytics-credentials.json",
+    "cloud_project": "your-cloud-project-id"
+  },
+  "ads": {
+    "credentials_file": "/absolute/path/to/ads-credentials.json",
+    "cloud_project": "your-cloud-project-id"
+  }
+}
