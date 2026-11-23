@@ -80,8 +80,8 @@ Use a dedicated app with access only where needed. An app is not automatically a
 Open a terminal on the machine that will run the reports:
 
 ```sh
-git clone https://github.com/FlaiData/ga4-landing-reports.git
-cd ga4-landing-reports
+git clone https://github.com/FlaiData/google-analytics-ads-ai.git
+cd google-analytics-ads-ai
 cp config.example.json config.json
 cp .env.example .env
 chmod 600 config.json .env

@@ -19,8 +19,8 @@ Google's official [Analytics MCP setup](https://github.com/googleanalytics/googl
 In a terminal, download the project and install it (if you already have a checkout, go to that directory instead):
 
 ```sh
-git clone https://github.com/FlaiData/ga4-landing-reports.git
-cd ga4-landing-reports
+git clone https://github.com/FlaiData/google-analytics-ads-ai.git
+cd google-analytics-ads-ai
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e '.[google-mcp]'

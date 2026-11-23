@@ -1,4 +1,6 @@
-# Google Analytics and Google Ads for your AI assistant
+# Google Analytics & Ads AI
+
+### Free Google Analytics and Google Ads insights in Codex and Claude Code
 
 **Free, open-source tools for connecting your Google Analytics 4 and Google Ads data to Codex or Claude Code.** Ask questions in everyday language, explore performance, and compare recent periods using your own accounts.
 

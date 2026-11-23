@@ -4,7 +4,7 @@ Ask your local Codex or Claude Code assistant questions about your Google Analyt
 
 ## Set up Google access
 
-You need Python 3.11+, a Google Cloud project with the appropriate API access, and access to your GA4 property and Google Ads account. Follow the detailed [Google connection guide](https://github.com/FlaiData/ga4-landing-reports/blob/main/docs/MCP_SETUP.md) through creating separate credentials and `~/.config/flai-google/profile.json`. Google Ads production access may require an application. Google authorization and access approval may require your administrator.
+You need Python 3.11+, a Google Cloud project with the appropriate API access, and access to your GA4 property and Google Ads account. Follow the detailed [Google connection guide](https://github.com/FlaiData/google-analytics-ads-ai/blob/main/docs/MCP_SETUP.md) through creating separate credentials and `~/.config/flai-google/profile.json`. Google Ads production access may require an application. Google authorization and access approval may require your administrator.
 
 In a macOS or Linux terminal, install the pinned upstream MCP packages into a dedicated virtual environment:
 
@@ -20,7 +20,7 @@ Keep your private profile and credential files outside any repository with permi
 ## Install for Codex
 
 ```sh
-codex plugin marketplace add https://github.com/FlaiData/ga4-landing-reports.git
+codex plugin marketplace add https://github.com/FlaiData/google-analytics-ads-ai.git
 codex plugin add flai-google@flaidata-google-tools
 ```
 
@@ -29,7 +29,7 @@ Alternatively open the project's marketplace in the Codex desktop Plugins direct
 ## Install for Claude Code
 
 ```sh
-claude plugin marketplace add FlaiData/ga4-landing-reports
+claude plugin marketplace add FlaiData/google-analytics-ads-ai
 claude plugin install flai-google@flaidata-google-tools
 ```
 
