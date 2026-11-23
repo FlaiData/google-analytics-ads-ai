@@ -10,7 +10,7 @@
     "com.openai": {
       "requires_local_executor": true,
       "interface": {
-        "displayName": "FlaiData Google Analytics & Ads",
+        "displayName": "FlaiData Google Insights",
         "shortDescription": "Free Google data insights",
         "longDescription": "Connect your own Google Analytics 4 and Google Ads accounts for read-only analysis. Free and open source; third-party services and API access requirements may apply.",
         "developerName": "FlaiData",

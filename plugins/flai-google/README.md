@@ -24,7 +24,7 @@ codex plugin marketplace add https://github.com/FlaiData/ga4-landing-reports.git
 codex plugin add flai-google@flaidata-google-tools
 ```
 
-Alternatively open the project's marketplace in the Codex desktop Plugins directory and install FlaiData Google Analytics & Ads. Start a fresh session. To refresh the marketplace use `codex plugin marketplace upgrade`, then follow your Codex client's plugin update instructions. Existing plugins and credentials remain yours; do not overwrite their configuration.
+Alternatively open the project's marketplace in the Codex desktop Plugins directory and install FlaiData Google Insights. Start a fresh session. To refresh the marketplace use `codex plugin marketplace upgrade flaidata-google-tools`, then follow your Codex client's plugin update instructions. Existing plugins and credentials remain yours; do not overwrite their configuration.
 
 ## Install for Claude Code
 
