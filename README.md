@@ -1,14 +1,21 @@
-# Landing-page reports for GA4
+# Google Analytics and Google Ads for AI and reporting
 
-**Understand what happens after people arrive on your landing pages — and share a concise report with your team in Slack.**
+Connect your AI assistant to your own Google Analytics 4 (GA4) and Google Ads data, or run scheduled GA4 landing-page reports for your team in Slack.
 
 ![An analytics chart flows through a scheduled server to a report and alert.](docs/images/reporting-illustration.png)
 
-This free, self-hosted tool reads your Google Analytics 4 (GA4) data, compares two equal periods, and posts a report to Slack. You choose the pages, the event to count, and the thresholds for alerts. It runs on a computer or server you control.
+**Choose what you want to do:**
 
-> **What you need:** access to a GA4 property, permission to create a Google Cloud service account and a Slack app, and a computer or Linux server with Docker. If someone else manages your accounts, ask them to help with access. You do not need to write code.
+- **Ask an AI assistant about analytics and advertising:** follow the [MCP setup guide](docs/MCP_SETUP.md), then use the [ready-to-use analysis scenarios](scenarios/README.md). These connect the assistant to Google's two separate official MCP servers using your own credentials. The supplied configuration exposes read-only tools by default.
+- **Send scheduled landing-page reports to Slack:** follow the [reporting setup below](#before-you-start). This separate tool reads GA4 directly and runs on a machine you control; it does not require an AI assistant.
 
-**Scope:** This project reads the Google Analytics Data API. It does **not** connect to Google Ads, change campaigns, or provide an MCP server. Google's separate [Analytics MCP server](https://github.com/googleanalytics/google-analytics-mcp) and [Google Ads MCP server](https://github.com/googleads/google-ads-mcp) are available if you need those integrations. This project is independent and is not an official Google product.
+The AI connection requires a compatible MCP client, Python, Google Cloud setup and access to the relevant Google accounts. The scheduled reporter requires GA4 and Slack access and a host with Docker. Both paths require some setup; account administrators may need to help.
+
+**Scope:** Google Ads analysis uses Google's official Ads MCP server; the Slack reporter currently reports GA4 only. The AI connection does not expose advertising changes by default. A separate [interactive utility](docs/MCP_SETUP.md#optional-create-one-ads-label-with-explicit-confirmation) can create one label after validation and typed confirmation. Upstream supports limited asset and label operations, not general campaign, budget or bid management through its MCP tools. Google access, permissions and API policies still apply. This independent project is not affiliated with or endorsed by Google.
+
+## Scheduled GA4 reports to Slack
+
+This self-hosted tool compares two equal periods and posts a report to Slack. You choose the pages, the event to count, and alert thresholds.
 
 ## What your team receives
 
@@ -264,7 +271,7 @@ Updates are **not automatic**. On GitHub, choose **Watch → Custom → Releases
 
 [<img src="docs/images/google-analytics-wordmark.png" alt="Google Analytics" width="272">](https://www.google.com/analytics/)
 
-The reports in this project use the Google Analytics Data API. The wordmark above is provided by Google and used subject to the [Google Analytics developer branding guidelines](https://developers.google.com/analytics/terms/branding-policy). Google Analytics and Google Ads are Google trademarks. This independent project is not affiliated with or endorsed by Google. **Google Ads is not supported by this project**; it is mentioned only to help distinguish the separate integration.
+The Slack reporter uses the Google Analytics Data API. The optional AI connection runs the separately distributed [Google Analytics MCP](https://github.com/googleanalytics/google-analytics-mcp) and [Google Ads MCP](https://github.com/googleads/google-ads-mcp), both provided by Google under Apache-2.0; see their repositories for licenses and notices. The wordmark above is provided by Google and used subject to the [Google Analytics developer branding guidelines](https://developers.google.com/analytics/terms/branding-policy). Google Analytics and Google Ads are Google trademarks. This independent project is not affiliated with or endorsed by Google.
 
 ## Development and verification
 

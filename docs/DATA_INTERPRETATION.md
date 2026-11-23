@@ -1,0 +1,11 @@
+# Interpreting GA4 and Google Ads reports
+
+Use the tools as read-only sources. Before a report, verify the exact account and property IDs, identity, currency, reporting time zone, reporting period, campaign scope and access. Labels or matching names alone do not prove that a GA4 property and a Google Ads account are linked. Use the Analytics link-list tool when available, then verify dates and coverage; a link alone does not prove every campaign or conversion is correctly attributed.
+
+For a 3-day comparison, compare the last 3 completed calendar days in the source account's time zone with the 3 completed days immediately before them. Repeat independently for 7 days. Exclude the current incomplete day and state all four exact ranges. Each source may use a different time zone and have different processing delays. When zones or ranges differ, do not present the figures as if they were measured over identical hours.
+
+Google Ads cost is often returned in micros; divide by 1,000,000 and display the account currency. For CTR, CPC and cost per conversion, compute from compatible aggregates rather than averaging row-level rates. Handle a zero denominator or previous value explicitly; do not invent a percentage change. Check account and campaign status separately from performance. A paused status now does not establish when or why it changed.
+
+A GA4 `eventCount` counts occurrences, not unique users, unique converting sessions or confirmed purchases. Do not divide event occurrences by sessions and call the result a conversion rate. Google Ads conversions and GA4 events can use different definitions, attribution, timing and counting. Do not sum them as unique sales. Consult [Google's reporting-data expectations](https://developers.google.com/analytics/devguides/reporting/data/v1/reporting-data-expectations), validate the event definitions and note sampling, thresholding, unavailable fields and freshness limitations.
+
+Default to showing source-specific values side by side. Avoid declaring that a change caused a performance result without evidence. Small samples, recently changed campaigns and delayed conversions may not support a reliable better-or-worse conclusion. These examples are analysis aids, not automatic optimizers.

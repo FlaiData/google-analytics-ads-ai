@@ -9,5 +9,12 @@ description = "Self-hosted GA4 landing page reports and Slack alerts"
 requires-python = ">=3.10"
 dependencies = ["google-auth>=2.25,<3", "requests>=2.31,<3"]
 
+[project.optional-dependencies]
+google-mcp = ["analytics-mcp==1.1.0", "google-ads-mcp==0.0.6"]
+
 [tool.setuptools.packages.find]
-include = ["landing_reports*"]
+include = ["landing_reports*", "integrations*", "manual_changes*"]
+
+[tool.setuptools.package-data]
+integrations = ["*.yaml", "*.json"]
+manual_changes = ["*.yaml"]
