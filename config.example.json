@@ -1,0 +1,35 @@
+{
+  "report_id": "example-landings",
+  "property_id": "123456789",
+  "timezone": "America/New_York",
+  "days": 30,
+  "paths": [
+    {
+      "path": "/example-show-ad",
+      "label": "Example Show"
+    },
+    {
+      "path": "/example-tour-ad",
+      "label": "Example Tour"
+    }
+  ],
+  "event_name": "ticket_button_click",
+  "event_label": "Ticket button clicks",
+  "slack_channel_id": "C0123456789",
+  "state_dir": "/data",
+  "alert_channel_id": "C0123456789",
+  "alert_rules": [
+    {
+      "metric": "sessions",
+      "direction": "decrease",
+      "percent": 30,
+      "min_previous": 100
+    },
+    {
+      "metric": "events",
+      "direction": "decrease",
+      "percent": 30,
+      "min_previous": 50
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+services:
+  report:
+    build: .
+    init: true
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/ga4-credentials.json
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - ${GA4_CREDENTIALS_FILE:?Set GA4_CREDENTIALS_FILE in .env}:/run/secrets/ga4-credentials.json:ro
+      - report-state:/data
+volumes:
+  report-state:

@@ -1,0 +1,9 @@
+**
+!Dockerfile
+!pyproject.toml
+!landing_reports/
+!landing_reports/*.py
+**/._*
+**/__pycache__
+**/__pycache__/**
+**/*.pyc
