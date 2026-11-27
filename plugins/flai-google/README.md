@@ -40,3 +40,7 @@ Restart Claude Code and use `/mcp` to check both connections. To update, run `cl
 Ask: “Show the Google Ads campaigns I can access, then compare the last three full days against the preceding three full days.” Check the chosen account, dates, time zone and currency. Also ask: “Compare landing page traffic and conversion events in GA4 over the last seven full days.” Data interpretations and attribution differ between platforms.
 
 The plugin does not change advertising campaigns or budgets and does not create scheduled Slack reports. The repository's separate GA4 Slack reporter is optional and requires its own setup and an always-on machine. A successful plugin install does not mean that Google's API or account permissions have been granted. No client credentials are included. This independent project is not endorsed by Google, OpenAI or Anthropic.
+
+## TLS troubleshooting
+
+If a real request fails with a certificate verification error, see [TLS diagnostics and an optional approved CA bundle](../../docs/MCP_SETUP.md#tls-certificate-errors-diagnose-before-changing-trust). A CA bundle does not configure a proxy or guarantee a fix.

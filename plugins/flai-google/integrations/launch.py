@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import ssl
 import stat
 import sys
 
@@ -35,6 +36,22 @@ def _private_file(value, label):
     if os.name == 'posix' and details.st_mode & 0o077:
         raise ValueError(f'{label} must not be accessible to group or other users (use chmod 600)')
     return path
+
+
+def _ca_bundle(value):
+    # CA certificates are public trust material, so unlike credentials the file
+    # may be system-owned and world-readable. Only explicitly selected files
+    # are used; symlinks are useful for system-managed trust stores.
+    if not isinstance(value, str) or not Path(value).is_absolute():
+        raise ValueError('ca_bundle_file must be an absolute file path')
+    path = Path(value)
+    try:
+        if not path.is_file():
+            raise ValueError('ca_bundle_file must be a regular file')
+        ssl.create_default_context(cafile=str(path))
+    except (OSError, ssl.SSLError) as exc:
+        raise ValueError('ca_bundle_file must be a readable PEM certificate bundle') from exc
+    return str(path)
 
 
 def _json_file(path, label):
@@ -67,7 +84,7 @@ def launch_spec(profile_path, server, *, environ=None, get_version=importlib.met
     section = profile.get(server)
     if not isinstance(section, dict):
         raise ValueError(f'profile is missing the {server} section')
-    allowed = {'credentials_file', 'cloud_project'}
+    allowed = {'credentials_file', 'cloud_project', 'ca_bundle_file'}
     if server == 'ads':
         allowed |= {'developer_token_file', 'login_customer_id'}
     if set(section) - allowed:
@@ -80,6 +97,11 @@ def launch_spec(profile_path, server, *, environ=None, get_version=importlib.met
     source_env = os.environ if environ is None else environ
     env = {k: source_env[k] for k in SAFE_ENV if k in source_env}
     env['GOOGLE_APPLICATION_CREDENTIALS'] = str(credentials_path)
+    if 'ca_bundle_file' in section:
+        ca = _ca_bundle(section['ca_bundle_file'])
+        env.pop('SSL_CERT_DIR', None)
+        # requests/OAuth, Python SSL, and gRPC have separate trust configuration.
+        env.update(SSL_CERT_FILE=ca, REQUESTS_CA_BUNDLE=ca, GRPC_DEFAULT_SSL_ROOTS_FILE_PATH=ca)
     if project:
         env['GOOGLE_CLOUD_PROJECT'] = project
     if server == 'analytics':

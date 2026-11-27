@@ -36,6 +36,39 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(env['GOOGLE_ADS_LOGIN_CUSTOMER_ID'],'1234567890')
         self.assertNotIn('GOOGLE_ADS_MCP_OAUTH_CLIENT_ID',env);self.assertNotIn('GOOGLE_ADS_MCP_OAUTH_CLIENT_SECRET',env)
         self.assertEqual(launch.READ_ONLY_PATH.read_bytes(),launch.READ_ONLY_CONFIG)
+    def test_explicit_ca_is_isolated_and_applied_to_both_servers(self):
+        bundle = self.root/'ca.pem'; bundle.write_text('synthetic')
+        for section in self.data.values(): section['ca_bundle_file'] = str(bundle)
+        self.save()
+        with patch.object(launch.ssl, 'create_default_context') as validate:
+            for server in ('analytics', 'ads'):
+                _, env = self.launch(server, {'SSL_CERT_FILE':'/old', 'SSL_CERT_DIR':'/old-dir', 'REQUESTS_CA_BUNDLE':'/bad', 'GRPC_DEFAULT_SSL_ROOTS_FILE_PATH':'/bad', 'HTTPS_PROXY':'http://bad'})
+                for key in ('SSL_CERT_FILE', 'REQUESTS_CA_BUNDLE', 'GRPC_DEFAULT_SSL_ROOTS_FILE_PATH'):
+                    self.assertEqual(env[key], str(bundle))
+                self.assertNotIn('SSL_CERT_DIR', env)
+                self.assertNotIn('HTTPS_PROXY', env)
+            self.assertEqual(validate.call_count, 2)
+    def test_real_system_ca_bundle_when_available(self):
+        import ssl
+        bundle = ssl.get_default_verify_paths().cafile
+        if not bundle or not Path(bundle).is_file(): self.skipTest('no system PEM bundle')
+        self.data['analytics']['ca_bundle_file'] = bundle; self.save()
+        _, env = self.launch('analytics')
+        self.assertEqual(env['REQUESTS_CA_BUNDLE'], bundle)
+
+    def test_invalid_ca_fails_closed(self):
+        for path in ('relative.pem', str(self.root/'missing.pem'), str(self.root)):
+            self.data['analytics']['ca_bundle_file'] = path; self.save()
+            with self.assertRaises(ValueError): self.launch('analytics')
+        bundle=self.root/'invalid.pem'; bundle.write_text('not a certificate')
+        self.data['analytics']['ca_bundle_file']=str(bundle); self.save()
+        with self.assertRaisesRegex(ValueError, 'PEM'): self.launch('analytics')
+    def test_unset_ca_does_not_inherit_grpc_requests_or_proxy(self):
+        _, env = self.launch('ads', {'GRPC_DEFAULT_SSL_ROOTS_FILE_PATH':'/bad', 'REQUESTS_CA_BUNDLE':'/bad', 'HTTPS_PROXY':'http://bad'})
+        self.assertNotIn('GRPC_DEFAULT_SSL_ROOTS_FILE_PATH', env)
+        self.assertNotIn('REQUESTS_CA_BUNDLE', env)
+        self.assertNotIn('HTTPS_PROXY', env)
+
     def test_missing_and_world_readable_credentials_fail_closed(self):
         self.creds.chmod(0o644)
         if os.name=='posix':
@@ -110,3 +143,25 @@ class UpstreamHandshakeTests(unittest.IsolatedAsyncioTestCase):
                                 else:
                                     self.assertIn('run_report',names)
                                     self.assertFalse(any(name.startswith(('create_','delete_','update_')) for name in names),names)
+
+
+class TLSDiagnosticTests(LaunchTests):
+    def test_probe_does_not_receive_credentials_or_token(self):
+        from integrations import tls_diagnostic
+        from types import SimpleNamespace
+        argv = ['tls_diagnostic', '--profile', str(self.profile), '--server', 'ads']
+        with patch('sys.argv', argv), patch('importlib.metadata.version', side_effect=self.version), patch('subprocess.run', return_value=SimpleNamespace(returncode=0)) as run:
+            self.assertEqual(tls_diagnostic.main(), 0)
+        command = run.call_args.args[0]
+        env = run.call_args.kwargs['env']
+        self.assertIn('-I', command)
+        self.assertNotIn('GOOGLE_APPLICATION_CREDENTIALS', env)
+        self.assertNotIn('GOOGLE_ADS_DEVELOPER_TOKEN', env)
+        self.assertNotIn('GOOGLE_ADS_LOGIN_CUSTOMER_ID', env)
+
+
+class PluginSyncTests(unittest.TestCase):
+    def test_tls_launcher_and_probe_match_plugin(self):
+        root = Path(__file__).resolve().parents[1]
+        for filename in ('launch.py', 'tls_diagnostic.py'):
+            self.assertEqual((root/'integrations'/filename).read_bytes(), (root/'plugins/flai-google/integrations'/filename).read_bytes())

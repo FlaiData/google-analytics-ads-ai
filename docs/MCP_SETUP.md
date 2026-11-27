@@ -148,6 +148,37 @@ In the AI client, first ask it to list available **read-only** tools, then ident
 
 Then use the [ready-to-copy analysis scenarios](../scenarios/README.md): GA4 landing-page analysis, Google Ads campaign status and 3-/7-day comparisons, and a combined source-by-source report. They are instructions for an AI client, not automatic scheduled jobs. See [data interpretation](DATA_INTERPRETATION.md) for attribution, metrics and time-zone cautions.
 
+## TLS certificate errors: diagnose before changing trust
+
+`CERTIFICATE_VERIFY_FAILED` can occur during the OAuth HTTPS request, a gRPC connection to a Google API, or elsewhere. A shell test passing does not establish what the Codex GUI MCP process sees: its parent environment, Python and trust settings can differ. Proxies can also affect the result. Do not disable certificate verification or blindly trust a downloaded certificate.
+
+**Optional explicit trust bundle.** If your administrator confirms the correct CA material, add `ca_bundle_file` to either or both private profile sections. Each value is an **absolute path** to a readable PEM CA bundle on the computer that runs the MCP server. For example, insert this field into each relevant object in your existing private profile (this fragment is not a complete profile):
+
+```json
+"ca_bundle_file": "/absolute/path/to/approved-ca-bundle.pem"
+```
+
+Use a complete bundle containing all roots needed for the endpoints you call; this setting selects a CA file for requests and gRPC and can replace their normal roots. A corporate TLS-inspection CA should be included only when approved by your organization, alongside required public roots. Ask your administrator for an approved exported PEM bundle and verify its provenance; on macOS the Keychain and Python/gRPC trust stores need not be identical, and there is no universal macOS bundle path. On Linux use your distribution's approved CA bundle or administrator-provided bundle; on Windows seek an approved PEM export and adapt the paths and permissions. Certificates are normally public, but protect the bundle against unauthorized modification. The launcher validates that the file is readable and contains PEM certificates; this does not prove they are trusted or appropriate.
+
+The launcher sets `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE` and `GRPC_DEFAULT_SSL_ROOTS_FILE_PATH` for that server; an explicit profile setting takes precedence over inherited `SSL_CERT_FILE` and clears `SSL_CERT_DIR`. Without it, existing `SSL_CERT_FILE`/`SSL_CERT_DIR` inheritance is retained; requests and gRPC use their defaults. The launcher deliberately does **not** inherit shell proxy settings. A mandatory HTTP or TLS-inspecting proxy may therefore require administrator-supported network configuration outside this launcher; this CA setting does not configure a proxy. Restart the client and its MCP server after editing the profile or trust bundle. A CA setting does not fix a wrong certificate, DNS, firewall, API authorization, clock or network routing.
+
+**Run separate, unauthenticated probes** with the Python environment and profile used by the MCP launcher. From the project checkout on the machine running the server:
+
+```sh
+.venv/bin/python -m integrations.tls_diagnostic --profile "$HOME/.config/flai-google/profile.json" --server analytics
+.venv/bin/python -m integrations.tls_diagnostic --profile "$HOME/.config/flai-google/profile.json" --server ads
+```
+
+For a plugin installation, use its own venv Python and the `integrations/tls_diagnostic.py` file from the exact installed plugin version, not an unrelated checkout. For example, substitute the actual plugin directory for `PLUGIN_DIR`:
+
+```sh
+"$HOME/.config/flai-google/venv/bin/python" "/absolute/path/to/PLUGIN_DIR/integrations/tls_diagnostic.py" --profile "$HOME/.config/flai-google/profile.json" --server ads
+```
+
+Repeat with `--server analytics`. The probes use the launcher's filtered environment and the same Python isolated mode, remove credential and developer-token environment variables from the probe process, and make **unauthenticated** requests: HTTPS to Google's OAuth host and gRPC channel handshakes to the Analytics Data and Google Ads hosts. They do not request account data or refresh a token. HTTPS reports TLS verification separately; an HTTP response means TLS connected but is not proof OAuth works. A gRPC timeout alone cannot distinguish certificate errors from proxy, firewall, DNS, routing or other failures. The diagnostic is a network test, not an actual MCP tool call or full API authentication test.
+
+Run the command from Codex's actual local execution environment when possible. It reproduces the launcher filtering but a shell launched separately may inherit different `SSL_CERT_FILE`/`SSL_CERT_DIR` values from the GUI MCP process; compare environments with an administrator without printing secrets, or use the explicit profile CA to make trust configuration independent of those variables. Check the same plugin version and interpreter, then restart the GUI and test a read-only MCP request with a permitted account. If the launcher refuses the profile, check the CA path, PEM format, file permissions and package versions. Do not post profile files, credentials, proxy URLs or environment dumps in an issue.
+
 ## Read-only boundaries and troubleshooting
 
 - Analytics starts without `--allow-write`, with `ANALYTICS_MCP_ALLOW_WRITE=false` and no inherited OAuth HTTP server settings. Ads starts with an integrity-checked configuration that disables `assets` and `labels`. The launcher clears unrelated inherited environment variables, including the upstream Ads HTTP OAuth proxy configuration. It exposes **local stdio**, not a public HTTP endpoint.
